@@ -1,0 +1,41 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+ENV/
+
+# ===== FastAPI / Django =====
+*.log
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== VS Code / IDE =====
+.vscode/
+.idea/
+
+# ===== Docker =====
+*.env
+docker-compose.override.yml
+docker-compose copy.yml
+docker-compose-nodb.yml
+docker-compose.yml
+
+# ===== Test / Coverage =====
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ===== Build =====
+build/
+dist/
+*.egg-info/
+
+# ===== Nginx =====
+*.pid
+
