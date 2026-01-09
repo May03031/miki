@@ -14,6 +14,7 @@ from app.core.security import (
     create_access_token, create_refresh_token, 
     get_token_hash, verify_token_hash
 )
+from app.core.verify_google_token import verify_google_token
 from config import settings
 import logging
 
@@ -79,7 +80,7 @@ class AuthService:
         
         # Enforce Method
         if user.auth.provider != AuthProvider.EMAIL:
-            raise HTTPException(status_code=400, detail=f"Please login with {user.auth.provider.value}")
+            raise HTTPException(status_code=400, detail=f"Please login with {user.auth.provider}")
 
         if not verify_password(data.password, user.auth.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -89,6 +90,78 @@ class AuthService:
 
         return await self.create_tokens(user, data.app_code)
 
+
+
+    async def login_google(self, data: OAuthLoginSchema, request: Request):
+        payload = await verify_google_token(data.id_token)
+
+        email = payload.get("email")
+        google_sub = payload["sub"]
+        name = payload.get("name")
+        avatar = payload.get("picture")
+
+        # 1. Tìm theo provider_id
+        user = await self._get_user_by_provider(
+            provider=AuthProvider.GOOGLE,
+            provider_id=google_sub
+        )
+
+        # 2. Fallback theo email
+        if not user and email:
+            user = await self._get_user_by_email(email)
+
+            if user and user.auth and user.auth.provider != AuthProvider.GOOGLE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Account exists. Please login with {user.auth.provider}"
+                )
+
+            if user and user.auth and not user.auth.provider_id:
+                user.auth.provider_id = google_sub
+
+        # 3. Auto-register
+        if not user:
+            user = User(email=email, name=name, avatar=avatar)
+            self.db.add(user)
+            await self.db.flush()
+
+            self.db.add(
+                UserAuth(
+                    user_id=user.id,
+                    provider=AuthProvider.GOOGLE,
+                    provider_id=google_sub
+                )
+            )
+
+            self.db.add(UserBalance(user_id=user.id))
+        else:
+            if not user.name and name:
+                user.name = name
+            if not user.avatar and avatar:
+                user.avatar = avatar
+
+        await self._log_login(user.id, data.app_code, "google", request)
+        await self.db.commit()
+
+        return await self.create_tokens(user, data.app_code)
+
+
+
+    async def _get_user_by_provider(self, provider, provider_id):
+        stmt = (
+            select(User)
+            .join(UserAuth)
+            .where(
+                UserAuth.provider == provider,
+                UserAuth.provider_id == provider_id
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+    """
+    
     async def verify_google_token(self, id_token: str) -> str:
         # MOCK: In production use google.oauth2.id_token.verify_oauth2_token
         if "invalid" in id_token:
@@ -120,7 +193,7 @@ class AuthService:
         await self.db.commit()
         
         return await self.create_tokens(user, data.app_code)
-
+    """
     async def verify_apple_token(self, id_token: str) -> str:
         # MOCK: Verify Apple Identity Token logic
         # Production: Decode JWT header, fetch Apple public keys, verify signature & audience
@@ -172,7 +245,9 @@ class AuthService:
 
         return {
             "id": str(user.id),
-            "email": user.email,
+            "email": user.email if user.email else None,
+            "name": user.name if user.name else None ,
+            "avatar": user.avatar if user.avatar else None ,
             "provider": user.auth.provider if user.auth else None,
             "balance": user.balance.amount if user.balance else 0,
             "is_active": user.is_active,

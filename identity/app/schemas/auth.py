@@ -28,7 +28,9 @@ class RefreshTokenSchema(BaseModel):
 
 class UserProfileSchema(BaseModel):
     id: UUID
-    email: EmailStr
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar: Optional[str] = None
     provider: str
     balance: float
     is_active: bool

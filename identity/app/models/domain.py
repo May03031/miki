@@ -17,12 +17,15 @@ class AuthProvider(str, Enum):
     EMAIL = "email"
     GOOGLE = "google"
     APPLE = "apple"
-
+"""
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=True)
+    avatar: Mapped[str] = mapped_column(String(255), nullable=True)
+  
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
@@ -37,9 +40,76 @@ class UserAuth(Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     provider: Mapped[AuthProvider] = mapped_column(String(50), nullable=False)
+    provider_id : Mapped[AuthProvider] = mapped_column(String(50), nullable=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True) # Only for Email provider
     
     user: Mapped["User"] = relationship(back_populates="auth")
+"""
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+   
+    email: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True
+    )
+
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    avatar: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        onupdate=func.now()
+    )
+    # Relationships
+    auth: Mapped["UserAuth"] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    balance: Mapped["UserBalance"] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+class UserAuth(Base):
+    __tablename__ = "user_auth"
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_id", name="uq_provider_provider_id"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True
+    )
+    provider: Mapped[AuthProvider] = mapped_column(String(50), nullable=False)
+    provider_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    password_hash: Mapped[Optional[str]] = mapped_column(
+        String,
+        nullable=True
+    )
+
+    user: Mapped["User"] = relationship(back_populates="auth")
+
 
 class UserBalance(Base):
     __tablename__ = "user_balances"
